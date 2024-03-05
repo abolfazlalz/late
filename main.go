@@ -16,12 +16,15 @@ func main() {
 	go ws.LoopMessage(quiteCh)
 
 	ch := make(chan *shell.Buffer)
-	sh := shell.NewShell(ch)
+	sh := shell.NewShell()
 	go func() {
 		if err := sh.Execute("ping", "google.com"); err != nil {
 			log.Printf("error: %v", err)
 		}
 	}()
+
+	obs := shell.Observer{}
+	ws.Register(obs)
 
 	go func() {
 		for {
@@ -31,6 +34,7 @@ func main() {
 	}()
 
 	app.GET("/ws", ws.Handle)
+	app.Static("/static", "./public")
 
 	if err := app.Run(":8000"); err != nil {
 		log.Printf("error during run app: %v", err)

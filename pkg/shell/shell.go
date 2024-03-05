@@ -2,44 +2,76 @@ package shell
 
 import (
 	"bufio"
-	"log"
 	"os/exec"
+	"sync"
+	"time"
 )
 
 type Buffer struct {
 	text string
+	time time.Time
 }
 
-type Shell struct {
+func NewBuffer(text string) *Buffer {
+	return &Buffer{text: text, time: time.Now()}
+}
+
+type CommandExecute struct {
 	bufferCh chan *Buffer
+	isDone   bool
+	command  string
+	args     []string
 }
 
-func NewShell(ch chan *Buffer) *Shell {
-	return &Shell{
-		bufferCh: ch,
+func NewCommandExecute(command string, args ...string) *CommandExecute {
+	return &CommandExecute{
+		bufferCh: make(chan *Buffer),
+		isDone:   false,
+		command:  command,
+		args:     args,
 	}
 }
 
-func (s Shell) Execute(command string, args ...string) error {
-	cmd := exec.Command(command, args...)
+type Shell struct {
+	commands map[int]*CommandExecute
+	lastId   int
+	mu       sync.Mutex
+}
+
+func NewShell() *Shell {
+	return &Shell{
+		commands: make(map[int]*CommandExecute),
+		lastId:   0,
+	}
+}
+
+func (s *Shell) Execute(command string, args ...string) (int, *CommandExecute) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastId++
+	execute := NewCommandExecute(command, args...)
+	s.commands[s.lastId] = execute
+	return s.lastId, execute
+}
+
+func (cmdExec *CommandExecute) Run() error {
+	cmd := exec.Command(cmdExec.command, cmdExec.args...)
 	stdout, err := cmd.StdoutPipe()
+
 	if err != nil {
 		return err
 	}
 
 	rd := bufio.NewReader(stdout)
 	if err := cmd.Start(); err != nil {
-		log.Fatal("Buffer Error:", err)
+		return err
 	}
 
 	for {
 		str, err := rd.ReadString('\n')
 		if err != nil {
-			log.Fatal("Read Error:", err)
 			return err
 		}
-		s.bufferCh <- &Buffer{text: str}
+		cmdExec.bufferCh <- NewBuffer(str)
 	}
-
-	return nil
 }
