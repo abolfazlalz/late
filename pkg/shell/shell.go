@@ -54,7 +54,7 @@ func (s *Shell) Execute(command string, args ...string) (int, *CommandExecute) {
 	return s.lastId, execute
 }
 
-func (cmdExec *CommandExecute) Run() error {
+func (cmdExec *CommandExecute) Run(quiteCh chan int) error {
 	cmd := exec.Command(cmdExec.command, cmdExec.args...)
 	stdout, err := cmd.StdoutPipe()
 
@@ -68,10 +68,15 @@ func (cmdExec *CommandExecute) Run() error {
 	}
 
 	for {
-		str, err := rd.ReadString('\n')
-		if err != nil {
-			return err
+		select {
+		case <-quiteCh:
+			return nil
+		default:
+			str, err := rd.ReadString('\n')
+			if err != nil {
+				return err
+			}
+			cmdExec.bufferCh <- NewBuffer(str)
 		}
-		cmdExec.bufferCh <- NewBuffer(str)
 	}
 }

@@ -2,37 +2,64 @@ package shell
 
 import (
 	"asalitermline/pkg/websocket"
-	websocket2 "github.com/gorilla/websocket"
+	gorillaws "github.com/gorilla/websocket"
+	"log"
 	"strings"
+	"sync"
 )
 
 type Observer struct {
+	id      int
+	execute *CommandExecute
+	mu      sync.Mutex
 }
 
-func (o Observer) Update(ws *websocket.Websocket, msg *websocket.Message) {
+func NewObserver() *Observer {
+	return &Observer{
+		mu: sync.Mutex{},
+	}
+}
+
+func (o *Observer) Update(ws *websocket.Websocket, msg *websocket.Message) {
 	sh := NewShell()
+
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	content, _ := msg.Content()
+	str := content.Value
+	seps := strings.Split(str, " ")
+	if len(seps) > 1 {
+		o.id, o.execute = sh.Execute(seps[0], seps[1:]...)
+	} else {
+		o.id, o.execute = sh.Execute(seps[0])
+	}
+
+	cmdQuit := make(chan int)
+	msg.Sender().OnClose(cmdQuit)
+
 	go func() {
-		str := msg.String()
-		seps := strings.Split(str, " ")
-		var err error
-		if len(seps) > 1 {
-			err = sh.Execute(seps[0], seps[1:]...)
-		} else {
-			err = sh.Execute(seps[0])
-		}
+		err := o.execute.Run(cmdQuit)
 		if err != nil {
+			log.Printf("error during run command: %v", err)
 			return
 		}
 	}()
 
-	go func() {
-		for {
-			buff := <-sh.bufferCh
-			ws.Clients().Send(websocket2.TextMessage, []byte(buff.text))
-		}
-	}()
+	go o.run(ws, msg)
 }
 
-func (o Observer) ID() string {
+func (o *Observer) run(_ *websocket.Websocket, msg *websocket.Message) {
+	for {
+		buff := <-o.execute.bufferCh
+		err := msg.Sender().Send(gorillaws.TextMessage, []byte(buff.text))
+		if err != nil {
+			log.Print("error during send message to client:", err)
+			continue
+		}
+	}
+}
+
+func (o *Observer) ID() string {
 	return "shell"
 }
