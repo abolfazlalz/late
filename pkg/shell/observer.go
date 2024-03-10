@@ -12,11 +12,13 @@ type Observer struct {
 	id      int
 	execute *CommandExecute
 	mu      sync.Mutex
+	msgCh   chan *Buffer
 }
 
 func NewObserver() *Observer {
 	return &Observer{
-		mu: sync.Mutex{},
+		msgCh: make(chan *Buffer),
+		mu:    sync.Mutex{},
 	}
 }
 
@@ -37,11 +39,12 @@ func (o *Observer) Update(ws *websocket.Websocket, msg *websocket.Message) {
 
 	cmdQuit := make(chan int)
 	msg.Sender().OnClose(cmdQuit)
+	o.execute.Subscribe(o.msgCh)
 
 	go func() {
 		err := o.execute.Run(cmdQuit)
 		if err != nil {
-			log.Printf("error during run command: %v", err)
+			log.Printf("error during run Command: %v", err)
 			return
 		}
 	}()
@@ -51,7 +54,7 @@ func (o *Observer) Update(ws *websocket.Websocket, msg *websocket.Message) {
 
 func (o *Observer) run(_ *websocket.Websocket, msg *websocket.Message) {
 	for {
-		buff := <-o.execute.bufferCh
+		buff := <-o.msgCh
 		err := msg.Sender().Send(gorillaws.TextMessage, []byte(buff.text))
 		if err != nil {
 			log.Print("error during send message to client:", err)
