@@ -1,7 +1,7 @@
 package shell
 
 import (
-	"asalitermline/pkg/websocket"
+	"github.com/abolfazlalz/late/pkg/websocket"
 	gorillaws "github.com/gorilla/websocket"
 	"log"
 	"strings"

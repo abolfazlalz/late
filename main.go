@@ -1,8 +1,8 @@
 package main
 
 import (
-	"asalitermline/pkg/shell"
-	"asalitermline/pkg/websocket"
+	"github.com/abolfazlalz/late/pkg/shell"
+	"github.com/abolfazlalz/late/pkg/websocket"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
