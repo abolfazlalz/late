@@ -13,18 +13,28 @@ const (
 	ClientDisconnected
 )
 
+type messageWrite struct {
+	Message     []byte
+	MessageType int
+}
+
 type Client struct {
 	id     int
 	conn   *websocket.Conn
 	status ClientStatus
 	quitCh []chan int
+	msgCh  chan messageWrite
 }
 
 func (c *Client) Send(msgType int, msg []byte) error {
 	if c.status == ClientDisconnected {
 		return nil
 	}
-	return c.conn.WriteMessage(msgType, msg)
+	c.msgCh <- messageWrite{
+		Message:     msg,
+		MessageType: msgType,
+	}
+	return nil
 }
 
 func (c *Client) LoopMessage(msgChan chan *Message) {
@@ -38,6 +48,13 @@ func (c *Client) LoopMessage(msgChan chan *Message) {
 		}
 
 		msgChan <- NewMessage(c, msgType, msg)
+	}
+}
+
+func (c *Client) LoopWriteMessage() {
+	for {
+		msg := <-c.msgCh
+		_ = c.conn.WriteMessage(msg.MessageType, msg.Message)
 	}
 }
 
@@ -67,6 +84,7 @@ func (c *Clients) AddConn(conn *websocket.Conn) *Client {
 		conn:   conn,
 		status: ClientConnected,
 		quitCh: make([]chan int, 0),
+		msgCh:  make(chan messageWrite),
 	}
 	c.clients = append(c.clients, client)
 

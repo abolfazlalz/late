@@ -36,6 +36,8 @@ func (ws *Websocket) Handle(c *gin.Context) {
 		log.Printf("error during ws connection: %v", err)
 	}
 	client := ws.clients.AddConn(conn)
+
+	go client.LoopWriteMessage()
 	client.LoopMessage(ws.msgChan)
 }
 
